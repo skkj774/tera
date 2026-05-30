@@ -1,4 +1,4 @@
-# テラウオーク Firebase 設定
+# テラウオークβ Firebase 設定
 
 ## 1. Firebase プロジェクトを作る
 
