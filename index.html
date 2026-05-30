@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>テラウオーク</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Temple Visit Journal</p>
+          <h1>テラウオーク</h1>
+          <p class="lead">訪れたお寺、感じたこと、御朱印や写真を静かに残すための記録帳。</p>
+          <p id="syncStatus" class="sync-status">ローカル保存</p>
+        </div>
+        <div class="stats" aria-label="記録の統計">
+          <div>
+            <strong id="totalCount">0</strong>
+            <span>記録</span>
+          </div>
+          <div>
+            <strong id="goshuinCount">0</strong>
+            <span>御朱印</span>
+          </div>
+          <div>
+            <strong id="favoriteCount">0</strong>
+            <span>お気に入り</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="workbench">
+        <form id="templeForm" class="panel" autocomplete="off">
+          <input type="hidden" id="recordId">
+          <div class="panel-heading">
+            <h2 id="formTitle">新しい記録</h2>
+            <button type="button" id="resetButton" class="ghost-button">クリア</button>
+          </div>
+
+          <label>
+            寺名
+            <input id="name" required list="templeSuggestions" placeholder="例: 清水寺">
+            <datalist id="templeSuggestions"></datalist>
+          </label>
+
+          <div class="field-grid">
+            <label>
+              都道府県・地域
+              <input id="area" placeholder="例: 京都府京都市">
+            </label>
+            <label>
+              参拝日
+              <input id="visitedAt" type="date">
+            </label>
+          </div>
+
+          <label>
+            印象・メモ
+            <textarea id="notes" rows="5" placeholder="境内の空気、見どころ、また行きたい季節など"></textarea>
+          </label>
+
+          <label>
+            写真URL
+            <input id="photoUrl" type="url" placeholder="https://...">
+          </label>
+
+          <div class="toggle-row">
+            <label class="check">
+              <input id="hasGoshuin" type="checkbox">
+              <span>御朱印あり</span>
+            </label>
+            <label class="check">
+              <input id="isFavorite" type="checkbox">
+              <span>お気に入り</span>
+            </label>
+          </div>
+
+          <button class="primary-button" type="submit">記録する</button>
+        </form>
+
+        <section class="records-area">
+          <div class="toolbar">
+            <label class="search">
+              <span>検索</span>
+              <input id="searchInput" placeholder="寺名、地域、メモで検索">
+            </label>
+            <select id="filterSelect" aria-label="表示フィルター">
+              <option value="all">すべて</option>
+              <option value="goshuin">御朱印あり</option>
+              <option value="favorite">お気に入り</option>
+            </select>
+            <select id="sortSelect" aria-label="並び替え">
+              <option value="newest">新しい順</option>
+              <option value="oldest">古い順</option>
+              <option value="name">寺名順</option>
+            </select>
+          </div>
+
+          <div id="emptyState" class="empty-state">
+            <h2>最初の一寺を記録しましょう</h2>
+            <p>左のフォームに寺名を入れて保存すると、ここに参拝記録が並びます。</p>
+          </div>
+
+          <div id="recordsList" class="records-list" aria-live="polite"></div>
+        </section>
+      </section>
+    </main>
+
+    <template id="recordTemplate">
+      <article class="record-card">
+        <div class="record-media"></div>
+        <div class="record-body">
+          <div class="record-topline">
+            <div>
+              <h3></h3>
+              <p class="meta"></p>
+            </div>
+            <button type="button" class="icon-button favorite-button" aria-label="お気に入りを切り替え">☆</button>
+          </div>
+          <p class="notes"></p>
+          <div class="badges"></div>
+          <div class="actions">
+            <button type="button" class="ghost-button edit-button">編集</button>
+            <button type="button" class="danger-button delete-button">削除</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="firebase-config.js"></script>
+    <script src="temples-db.js"></script>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+      import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+
+      window.terawalkFirebaseSdk = { initializeApp, getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot };
+      window.dispatchEvent(new Event("terawalk-firebase-sdk-ready"));
+    </script>
+    <script src="app.js"></script>
+  </body>
+</html>
