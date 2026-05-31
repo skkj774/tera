@@ -100,6 +100,41 @@ function formatCoordinate(value) {
   return value.toFixed(4);
 }
 
+function formatNearestAddress(place) {
+  if (!place) return "";
+
+  const address = place.address ?? {};
+  const buildingName = place.name || address.building || address.amenity || address.shop || "";
+  const addressParts = [
+    address.province || address.state,
+    address.city || address.town || address.village || address.municipality,
+    address.suburb || address.neighbourhood || address.quarter,
+    address.road,
+    address.house_number
+  ].filter(Boolean);
+
+  if (buildingName && addressParts.length > 0) {
+    return `${buildingName} / ${addressParts.join("")}`;
+  }
+
+  return buildingName || addressParts.join("") || place.display_name || "";
+}
+
+async function findNearestAddress(latitude, longitude) {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    lat: String(latitude),
+    lon: String(longitude),
+    zoom: "18",
+    addressdetails: "1",
+    namedetails: "1"
+  });
+
+  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`);
+  if (!response.ok) throw new Error("Reverse geocoding failed");
+  return response.json();
+}
+
 function initializeCurrentLocation() {
   if (!locationStatus) return;
 
@@ -110,15 +145,23 @@ function initializeCurrentLocation() {
 
   setLocationStatus("現在地を確認中");
 
-  navigator.geolocation.getCurrentPosition((position) => {
+  navigator.geolocation.getCurrentPosition(async (position) => {
     const { latitude, longitude, accuracy } = position.coords;
     const accuracyText = Number.isFinite(accuracy)
       ? ` / 誤差約${Math.round(accuracy)}m`
       : "";
+    const coordinateText = `現在地: ${formatCoordinate(latitude)}, ${formatCoordinate(longitude)}${accuracyText}`;
 
-    setLocationStatus(
-      `現在地: ${formatCoordinate(latitude)}, ${formatCoordinate(longitude)}${accuracyText}`
-    );
+    setLocationStatus(`${coordinateText} / 所在地を確認中`);
+
+    try {
+      const nearestPlace = await findNearestAddress(latitude, longitude);
+      const nearestAddress = formatNearestAddress(nearestPlace);
+      setLocationStatus(nearestAddress ? `${coordinateText} / 所在地: ${nearestAddress}` : coordinateText);
+    } catch (error) {
+      console.error(error);
+      setLocationStatus(`${coordinateText} / 所在地を取得できません`);
+    }
   }, () => {
     setLocationStatus("現在地は未許可");
   }, {
