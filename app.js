@@ -14,6 +14,7 @@ const template = document.querySelector("#recordTemplate");
 const templeSuggestions = document.querySelector("#templeSuggestions");
 const syncStatus = document.querySelector("#syncStatus");
 const locationStatus = document.querySelector("#locationStatus");
+const locationProgress = document.querySelector("#locationProgress span");
 const registeredCount = document.querySelector("#registeredCount");
 
 const fields = {
@@ -131,6 +132,10 @@ function setRegisteredCount(count) {
 
 function setLocationStatus(text) {
   if (locationStatus) locationStatus.textContent = text;
+}
+
+function setLocationProgress(percent) {
+  if (locationProgress) locationProgress.style.width = `${Math.max(0, Math.min(100, percent))}%`;
 }
 
 function replaceLocationStatus(...nodes) {
@@ -681,8 +686,10 @@ function initializeCurrentLocation() {
   }
 
   setLocationStatus("現在地を確認中");
+  setLocationProgress(12);
 
   navigator.geolocation.getCurrentPosition(async (position) => {
+    setLocationProgress(28);
     const { latitude, longitude, accuracy } = position.coords;
     const accuracyText = Number.isFinite(accuracy)
       ? ` / 誤差約${Math.round(accuracy)}m`
@@ -692,13 +699,16 @@ function initializeCurrentLocation() {
     setLocationStatus(`${coordinateText} / 所在地と最寄りの寺を確認中`);
 
     try {
+      setLocationProgress(45);
       const reversePlace = await findNearestAddress(latitude, longitude).catch(() => null);
       const addressTokens = getAddressSearchTokens(reversePlace);
+      setLocationProgress(62);
       const [nearestBuilding, nearestTemples, databaseTemples] = await Promise.allSettled([
         findNearestOsmElement(latitude, longitude),
         findNearestTemples(latitude, longitude),
         findNearestTemplesFromDatabase(latitude, longitude, addressTokens)
       ]);
+      setLocationProgress(88);
       let nearestAddress = nearestBuilding.status === "fulfilled" ? nearestBuilding.value : "";
       if (!nearestAddress) nearestAddress = formatNearestAddress(reversePlace);
       const osmTempleTop10 = nearestTemples.status === "fulfilled" ? nearestTemples.value : [];
@@ -708,12 +718,15 @@ function initializeCurrentLocation() {
       if (nearestAddress) detailNodes.push(createTextNode(` / 所在地: ${nearestAddress}`));
       detailNodes.push(createTextNode(" / "), createNearestTemplePopup(templeTop10));
       replaceLocationStatus(...detailNodes);
+      setLocationProgress(100);
     } catch (error) {
       console.error(error);
       setLocationStatus(`${coordinateText} / 所在地を取得できません`);
+      setLocationProgress(100);
     }
   }, () => {
     setLocationStatus("現在地は未許可");
+    setLocationProgress(100);
   }, {
     enableHighAccuracy: false,
     maximumAge: 1000 * 60 * 10,

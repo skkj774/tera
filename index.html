@@ -14,7 +14,12 @@
           <h1>テラウオークβ</h1>
           <p class="lead">訪れたお寺、感じたこと、御朱印や写真を静かに残すための記録帳。</p>
           <p id="syncStatus" class="sync-status">ローカル保存</p>
-          <div id="locationStatus" class="location-status">現在地を確認中</div>
+          <div class="location-block">
+            <div id="locationStatus" class="location-status">現在地を確認中</div>
+            <div id="locationProgress" class="location-progress" aria-hidden="true">
+              <span></span>
+            </div>
+          </div>
         </div>
         <div class="stats" aria-label="記録の統計">
           <div>
