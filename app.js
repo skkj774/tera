@@ -690,13 +690,9 @@ function initializeCurrentLocation() {
 
   navigator.geolocation.getCurrentPosition(async (position) => {
     setLocationProgress(28);
-    const { latitude, longitude, accuracy } = position.coords;
-    const accuracyText = Number.isFinite(accuracy)
-      ? ` / 誤差約${Math.round(accuracy)}m`
-      : "";
-    const coordinateText = `現在地: ${formatCoordinate(latitude)}, ${formatCoordinate(longitude)}${accuracyText}`;
+    const { latitude, longitude } = position.coords;
 
-    setLocationStatus(`${coordinateText} / 所在地と最寄りの寺を確認中`);
+    setLocationStatus("最寄りの寺を確認中");
 
     try {
       setLocationProgress(45);
@@ -714,14 +710,12 @@ function initializeCurrentLocation() {
       const osmTempleTop10 = nearestTemples.status === "fulfilled" ? nearestTemples.value : [];
       const databaseTempleTop10 = databaseTemples.status === "fulfilled" ? databaseTemples.value : [];
       const templeTop10 = mergeTempleResults(databaseTempleTop10, osmTempleTop10);
-      const detailNodes = [createTextNode(coordinateText)];
-      if (nearestAddress) detailNodes.push(createTextNode(` / 所在地: ${nearestAddress}`));
-      detailNodes.push(createTextNode(" / "), createNearestTemplePopup(templeTop10));
+      const detailNodes = [createNearestTemplePopup(templeTop10)];
       replaceLocationStatus(...detailNodes);
       setLocationProgress(100);
     } catch (error) {
       console.error(error);
-      setLocationStatus(`${coordinateText} / 所在地を取得できません`);
+      setLocationStatus("最寄りの寺を取得できません");
       setLocationProgress(100);
     }
   }, () => {
