@@ -168,14 +168,16 @@ function formatNearestAddress(place) {
 
 function getAddressSearchTokens(place) {
   const address = place?.address ?? {};
+  const displayName = place?.display_name || "";
   const tokens = [
     address.province || address.state,
     address.city || address.town || address.village || address.municipality,
     address.city_district || address.suburb || address.ward,
     address.neighbourhood || address.quarter
   ].filter(Boolean);
+  const displayTokens = displayName.match(/[^,\s]+(?:都|道|府|県|市|区|町|村)/g) || [];
 
-  return [...new Set(tokens)];
+  return [...new Set([...tokens, ...displayTokens])].sort((first, second) => second.length - first.length);
 }
 
 function toRadians(value) {
@@ -300,6 +302,7 @@ function findNearestElements(elements, latitude, longitude, limit = 10) {
 }
 
 function formatDistance(meters) {
+  if (!Number.isFinite(meters)) return "距離未計算";
   if (meters >= 1000) return `約${(meters / 1000).toFixed(1)}km`;
   return `約${Math.round(meters)}m`;
 }
@@ -500,18 +503,21 @@ async function findNearestTemplesFromDatabase(latitude, longitude, addressTokens
     return [];
   }
 
-  const candidates = templeDatabase
-    .filter((temple) => {
-      const location = temple.location || "";
-      return addressTokens.some((token) => location.includes(token));
-    })
-    .slice(0, 30);
+  const candidates = getDatabaseTempleCandidates(addressTokens).slice(0, 30);
 
   const geocoded = [];
+  const fallback = [];
 
   for (const temple of candidates) {
     const coordinates = await geocodeTempleAddress(temple);
-    if (!coordinates) continue;
+    if (!coordinates) {
+      fallback.push({
+        source: "db",
+        temple,
+        distance: Number.POSITIVE_INFINITY
+      });
+      continue;
+    }
 
     geocoded.push({
       source: "db",
@@ -522,7 +528,16 @@ async function findNearestTemplesFromDatabase(latitude, longitude, addressTokens
     if (geocoded.length >= 10) break;
   }
 
-  return geocoded.sort((first, second) => first.distance - second.distance);
+  return [...geocoded.sort((first, second) => first.distance - second.distance), ...fallback].slice(0, 10);
+}
+
+function getDatabaseTempleCandidates(addressTokens) {
+  for (const token of addressTokens) {
+    const candidates = templeDatabase.filter((temple) => (temple.location || "").includes(token));
+    if (candidates.length > 0) return candidates;
+  }
+
+  return [];
 }
 
 async function geocodeTempleAddress(temple) {
@@ -541,6 +556,7 @@ async function geocodeTempleAddress(temple) {
     format: "jsonv2",
     q: `${temple.name} ${temple.location}`,
     countrycodes: "jp",
+    "accept-language": "ja",
     limit: "1"
   });
 
@@ -588,6 +604,7 @@ async function findNearestTemplesFromNominatim(latitude, longitude) {
     format: "jsonv2",
     q: "寺",
     addressdetails: "1",
+    "accept-language": "ja",
     limit: "30",
     bounded: "1",
     viewbox: [
@@ -627,7 +644,8 @@ async function findNearestAddress(latitude, longitude) {
     lon: String(longitude),
     zoom: "18",
     addressdetails: "1",
-    namedetails: "1"
+    namedetails: "1",
+    "accept-language": "ja"
   });
 
   const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`);
