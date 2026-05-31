@@ -92,6 +92,27 @@ function fillTempleLocation() {
   }
 }
 
+function getTodayDateValue() {
+  const now = new Date();
+  const offsetDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 10);
+}
+
+function fillRecordFormFromTemple(temple) {
+  const name = temple.source === "db"
+    ? temple.temple.name
+    : getOsmTempleName(temple.element);
+  const location = temple.source === "db"
+    ? temple.temple.location || ""
+    : formatTempleAddress(temple.element);
+
+  fields.name.value = name;
+  fields.area.value = extractRegion(location) || location;
+  fields.visitedAt.value = fields.visitedAt.value || getTodayDateValue();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  fields.notes.focus();
+}
+
 function loadRecords() {
   try {
     return JSON.parse(localStorage.getItem(storageKey)) ?? [];
@@ -326,8 +347,13 @@ function formatTempleElement(nearest) {
   }
 
   const tags = nearest.element.tags ?? {};
-  const name = tags.name || tags["name:ja"] || tags["name:en"] || "名称未設定の寺院";
+  const name = getOsmTempleName(nearest.element);
   return `${name} ${formatTempleRegion(nearest)}（${formatDistance(nearest.distance)}）`;
+}
+
+function getOsmTempleName(element) {
+  const tags = element?.tags ?? {};
+  return tags.name || tags["name:ja"] || tags["name:en"] || "名称未設定の寺院";
 }
 
 function formatTempleRegion(temple) {
@@ -418,9 +444,15 @@ function createNearestTemplePopup(temples) {
     item.className = "temple-popup-item";
     item.tabIndex = 0;
 
-    const name = document.createElement("span");
+    const name = document.createElement("button");
+    name.type = "button";
     name.className = "temple-popup-name";
     name.textContent = `${index + 1}. ${formatTempleElement(temple)}`;
+    name.addEventListener("click", () => {
+      fillRecordFormFromTemple(temple);
+      hideFloatingPopup(address);
+      hideFloatingPopup(popup);
+    });
 
     const address = document.createElement("span");
     address.className = "temple-address-popup floating-popup";
@@ -842,6 +874,7 @@ function resetForm() {
   form.reset();
   recordId.value = "";
   formTitle.textContent = "新しい記録";
+  fields.visitedAt.value = getTodayDateValue();
   fields.name.focus();
 }
 
@@ -987,6 +1020,7 @@ filterSelect.addEventListener("change", renderRecords);
 sortSelect.addEventListener("change", renderRecords);
 
 setupTempleDatabase();
+fields.visitedAt.value = fields.visitedAt.value || getTodayDateValue();
 renderRecords();
 initializeCurrentLocation();
 initializeCloudSync();

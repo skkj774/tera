@@ -186,9 +186,19 @@ h1 {
 
 .temple-popup-name {
   display: inline;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
   font-size: 0.88rem;
   font-weight: 700;
   line-height: 1.45;
+}
+
+.temple-popup-name:hover,
+.temple-popup-name:focus {
+  color: var(--vermillion);
 }
 
 .temple-address-popup {
