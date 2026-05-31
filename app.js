@@ -287,8 +287,6 @@ function createNearestTemplePopup(temples) {
   label.textContent = `最寄りの寺: ${nearestLabel}`;
   wrapper.append(label);
 
-  if (temples.length === 0) return wrapper;
-
   const popup = document.createElement("span");
   popup.className = "temple-popup";
 
@@ -299,6 +297,13 @@ function createNearestTemplePopup(temples) {
 
   const list = document.createElement("span");
   list.className = "temple-popup-list";
+
+  if (temples.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "temple-popup-empty";
+    empty.textContent = "周辺の寺院データが見つかりませんでした";
+    list.append(empty);
+  }
 
   temples.forEach((temple, index) => {
     const item = document.createElement("span");
@@ -319,6 +324,12 @@ function createNearestTemplePopup(temples) {
 
   popup.append(list);
   wrapper.append(popup);
+
+  wrapper.addEventListener("mouseenter", () => wrapper.classList.add("is-open"));
+  wrapper.addEventListener("mouseleave", () => wrapper.classList.remove("is-open"));
+  wrapper.addEventListener("focusin", () => wrapper.classList.add("is-open"));
+  wrapper.addEventListener("focusout", () => wrapper.classList.remove("is-open"));
+
   return wrapper;
 }
 
@@ -361,6 +372,9 @@ async function findNearestTemples(latitude, longitude) {
       node(around:5000,${latitude},${longitude})["building"="temple"];
       way(around:5000,${latitude},${longitude})["building"="temple"];
       relation(around:5000,${latitude},${longitude})["building"="temple"];
+      node(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["name"~"寺|院|庵|堂"];
+      way(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["name"~"寺|院|庵|堂"];
+      relation(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["name"~"寺|院|庵|堂"];
     );
     out center tags 80;
   `;
@@ -415,7 +429,7 @@ function initializeCurrentLocation() {
       const templeTop10 = nearestTemples.status === "fulfilled" ? nearestTemples.value : [];
       const detailNodes = [createTextNode(coordinateText)];
       if (nearestAddress) detailNodes.push(createTextNode(` / 所在地: ${nearestAddress}`));
-      if (templeTop10.length > 0) detailNodes.push(createTextNode(" / "), createNearestTemplePopup(templeTop10));
+      detailNodes.push(createTextNode(" / "), createNearestTemplePopup(templeTop10));
       replaceLocationStatus(...detailNodes);
     } catch (error) {
       console.error(error);

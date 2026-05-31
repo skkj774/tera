@@ -99,6 +99,8 @@ h1 {
 .temple-hover {
   position: relative;
   display: inline-flex;
+  min-height: 30px;
+  align-items: center;
   color: var(--moss-dark);
   outline: none;
 }
@@ -125,15 +127,17 @@ h1 {
 
 .temple-popup {
   left: 0;
-  top: calc(100% + 8px);
+  top: 100%;
   width: min(360px, calc(100vw - 40px));
   padding: 12px;
 }
 
 .temple-hover:hover .temple-popup,
 .temple-hover:focus-within .temple-popup,
+.temple-hover.is-open .temple-popup,
 .temple-popup-item:hover .temple-address-popup,
-.temple-popup-item:focus .temple-address-popup {
+.temple-popup-item:focus .temple-address-popup,
+.temple-popup-item.is-open .temple-address-popup {
   display: grid;
 }
 
@@ -148,6 +152,12 @@ h1 {
 .temple-popup-list {
   display: grid;
   gap: 7px;
+}
+
+.temple-popup-empty {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
 
 .temple-popup-item {
