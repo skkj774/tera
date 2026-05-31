@@ -200,12 +200,29 @@ function formatOsmElementAddress(element) {
 }
 
 async function fetchOverpassElements(query) {
-  const params = new URLSearchParams({ data: query });
-  const response = await fetch(`https://overpass-api.de/api/interpreter?${params}`);
-  if (!response.ok) throw new Error("Overpass lookup failed");
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter"
+  ];
 
-  const data = await response.json();
-  return Array.isArray(data.elements) ? data.elements : [];
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body: new URLSearchParams({ data: query })
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      return Array.isArray(data.elements) ? data.elements : [];
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  throw new Error("Overpass lookup failed");
 }
 
 function findNearestElement(elements, latitude, longitude) {
@@ -259,6 +276,18 @@ function formatTempleElement(nearest) {
   const tags = nearest.element.tags ?? {};
   const name = tags.name || tags["name:ja"] || tags["name:en"] || "名称未設定の寺院";
   return `${name}（${formatDistance(nearest.distance)}）`;
+}
+
+function isLikelyTempleElement(element) {
+  const tags = element.tags ?? {};
+  const name = `${tags.name || ""}${tags["name:ja"] || ""}${tags["name:en"] || ""}`;
+
+  return (
+    tags.religion === "buddhist" ||
+    tags.historic === "temple" ||
+    tags.building === "temple" ||
+    /寺|院|庵|堂/.test(name)
+  );
 }
 
 function formatTempleAddress(element) {
@@ -388,25 +417,75 @@ async function findNearestOsmElement(latitude, longitude) {
 }
 
 async function findNearestTemples(latitude, longitude) {
-  const query = `
-    [out:json][timeout:10];
+  const taggedTempleQuery = `
+    [out:json][timeout:18];
     (
-      node(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
-      way(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
-      relation(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
-      node(around:5000,${latitude},${longitude})["historic"="temple"];
-      way(around:5000,${latitude},${longitude})["historic"="temple"];
-      relation(around:5000,${latitude},${longitude})["historic"="temple"];
-      node(around:5000,${latitude},${longitude})["building"="temple"];
-      way(around:5000,${latitude},${longitude})["building"="temple"];
-      relation(around:5000,${latitude},${longitude})["building"="temple"];
-      node(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["name"~"寺|院|庵|堂"];
-      way(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["name"~"寺|院|庵|堂"];
-      relation(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["name"~"寺|院|庵|堂"];
+      node(around:20000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
+      way(around:20000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
+      relation(around:20000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
+      node(around:20000,${latitude},${longitude})["historic"="temple"];
+      way(around:20000,${latitude},${longitude})["historic"="temple"];
+      relation(around:20000,${latitude},${longitude})["historic"="temple"];
+      node(around:20000,${latitude},${longitude})["building"="temple"];
+      way(around:20000,${latitude},${longitude})["building"="temple"];
+      relation(around:20000,${latitude},${longitude})["building"="temple"];
     );
-    out center tags 80;
+    out center tags 200;
   `;
-  const elements = await fetchOverpassElements(query);
+  const nameTempleQuery = `
+    [out:json][timeout:18];
+    (
+      node(around:20000,${latitude},${longitude})["name"~"寺|院|庵|堂"];
+      way(around:20000,${latitude},${longitude})["name"~"寺|院|庵|堂"];
+      relation(around:20000,${latitude},${longitude})["name"~"寺|院|庵|堂"];
+    );
+    out center tags 200;
+  `;
+
+  const taggedElements = await fetchOverpassElements(taggedTempleQuery).catch(() => []);
+  const nameElements = await fetchOverpassElements(nameTempleQuery).catch(() => []);
+  const nearest = findNearestElements([...taggedElements, ...nameElements].filter(isLikelyTempleElement), latitude, longitude, 10);
+
+  if (nearest.length > 0) return nearest;
+  return findNearestTemplesFromNominatim(latitude, longitude);
+}
+
+async function findNearestTemplesFromNominatim(latitude, longitude) {
+  const longitudeDelta = 0.18;
+  const latitudeDelta = 0.18;
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    q: "寺",
+    addressdetails: "1",
+    limit: "30",
+    bounded: "1",
+    viewbox: [
+      longitude - longitudeDelta,
+      latitude + latitudeDelta,
+      longitude + longitudeDelta,
+      latitude - latitudeDelta
+    ].join(",")
+  });
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
+  if (!response.ok) return [];
+
+  const places = await response.json();
+  const elements = places.map((place) => {
+    const displayName = place.display_name || "";
+    const name = place.name || displayName.split(",")[0] || "名称未設定の寺院";
+
+    return {
+      type: "node",
+      id: place.place_id,
+      lat: Number(place.lat),
+      lon: Number(place.lon),
+      tags: {
+        name,
+        "addr:full": displayName
+      }
+    };
+  });
+
   return findNearestElements(elements, latitude, longitude, 10);
 }
 
