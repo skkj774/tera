@@ -111,6 +111,10 @@ function saveCache(cache) {
   fs.writeFileSync(cachePath, `${JSON.stringify(cache, null, 2)}\n`, "utf8");
 }
 
+function cacheKey(row) {
+  return `${row.name}|${row.location}`;
+}
+
 function buildQueries(row) {
   const name = row.name.replace(/\s*\(.+?\)\s*$/, "").trim();
   const location = row.location.trim();
@@ -187,12 +191,14 @@ function writeDatabase(rows) {
 async function main() {
   const rows = parseCsv(fs.readFileSync(csvPath, "utf8"));
   const cache = loadCache();
-  const targets = rows.filter((row) => !hasCoordinates(row) && hasUsefulLocation(row)).slice(0, limit);
+  const targets = rows
+    .filter((row) => !hasCoordinates(row) && hasUsefulLocation(row) && cache[cacheKey(row)] !== null)
+    .slice(0, limit);
   let updated = 0;
   let missed = 0;
 
   for (const row of targets) {
-    const key = `${row.name}|${row.location}`;
+    const key = cacheKey(row);
 
     try {
       if (!(key in cache)) {
