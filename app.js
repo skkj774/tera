@@ -288,7 +288,7 @@ function createNearestTemplePopup(temples) {
   wrapper.append(label);
 
   const popup = document.createElement("span");
-  popup.className = "temple-popup";
+  popup.className = "temple-popup floating-popup";
 
   const title = document.createElement("span");
   title.className = "temple-popup-title";
@@ -315,22 +315,50 @@ function createNearestTemplePopup(temples) {
     name.textContent = `${index + 1}. ${formatTempleElement(temple)}`;
 
     const address = document.createElement("span");
-    address.className = "temple-address-popup";
+    address.className = "temple-address-popup floating-popup";
     address.textContent = formatTempleAddress(temple.element);
 
-    item.append(name, address);
+    item.addEventListener("mouseenter", () => showFloatingPopup(address, item));
+    item.addEventListener("mouseleave", () => hideFloatingPopup(address));
+    item.addEventListener("focus", () => showFloatingPopup(address, item));
+    item.addEventListener("blur", () => hideFloatingPopup(address));
+
+    document.body.append(address);
+    item.append(name);
     list.append(item);
   });
 
   popup.append(list);
-  wrapper.append(popup);
+  document.body.append(popup);
 
-  wrapper.addEventListener("mouseenter", () => wrapper.classList.add("is-open"));
-  wrapper.addEventListener("mouseleave", () => wrapper.classList.remove("is-open"));
-  wrapper.addEventListener("focusin", () => wrapper.classList.add("is-open"));
-  wrapper.addEventListener("focusout", () => wrapper.classList.remove("is-open"));
+  let popupCloseTimer = null;
+  const openPopup = () => {
+    clearTimeout(popupCloseTimer);
+    showFloatingPopup(popup, wrapper);
+  };
+  const closePopupSoon = () => {
+    popupCloseTimer = setTimeout(() => hideFloatingPopup(popup), 180);
+  };
+
+  wrapper.addEventListener("mouseenter", openPopup);
+  wrapper.addEventListener("mouseleave", closePopupSoon);
+  wrapper.addEventListener("focusin", () => showFloatingPopup(popup, wrapper));
+  wrapper.addEventListener("focusout", () => hideFloatingPopup(popup));
+  popup.addEventListener("mouseenter", () => clearTimeout(popupCloseTimer));
+  popup.addEventListener("mouseleave", () => hideFloatingPopup(popup));
 
   return wrapper;
+}
+
+function showFloatingPopup(popup, anchor) {
+  const rect = anchor.getBoundingClientRect();
+  popup.classList.add("is-open");
+  popup.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - popup.offsetWidth - 12))}px`;
+  popup.style.top = `${rect.bottom + 6}px`;
+}
+
+function hideFloatingPopup(popup) {
+  popup.classList.remove("is-open");
 }
 
 async function findNearestOsmElement(latitude, longitude) {

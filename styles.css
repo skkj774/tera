@@ -89,6 +89,7 @@ h1 {
 
 .location-status {
   position: relative;
+  z-index: 30;
   max-width: min(100%, 760px);
   margin-left: 8px;
   color: #4d5f56;
@@ -115,8 +116,8 @@ h1 {
 
 .temple-popup,
 .temple-address-popup {
-  position: absolute;
-  z-index: 20;
+  position: fixed;
+  z-index: 1000;
   display: none;
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid var(--line);
@@ -126,18 +127,11 @@ h1 {
 }
 
 .temple-popup {
-  left: 0;
-  top: 100%;
   width: min(360px, calc(100vw - 40px));
   padding: 12px;
 }
 
-.temple-hover:hover .temple-popup,
-.temple-hover:focus-within .temple-popup,
-.temple-hover.is-open .temple-popup,
-.temple-popup-item:hover .temple-address-popup,
-.temple-popup-item:focus .temple-address-popup,
-.temple-popup-item.is-open .temple-address-popup {
+.floating-popup.is-open {
   display: grid;
 }
 
@@ -174,8 +168,6 @@ h1 {
 }
 
 .temple-address-popup {
-  left: 18px;
-  top: calc(100% + 4px);
   width: min(320px, calc(100vw - 72px));
   padding: 9px 10px;
   font-size: 0.82rem;
