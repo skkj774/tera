@@ -44,8 +44,16 @@ function setupTempleDatabase() {
 function normalizeTempleEntry(temple) {
   return {
     name: decodeMojibake(temple.name || ""),
-    location: decodeMojibake(temple.location || "")
+    location: decodeMojibake(temple.location || ""),
+    latitude: parseCoordinate(temple.latitude),
+    longitude: parseCoordinate(temple.longitude)
   };
+}
+
+function parseCoordinate(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function decodeMojibake(value) {
@@ -572,7 +580,7 @@ async function findNearestTemplesFromDatabase(latitude, longitude, addressTokens
   const fallback = [];
 
   for (const temple of candidates) {
-    const coordinates = await geocodeTempleAddress(temple);
+    const coordinates = getTempleCoordinates(temple);
     if (!coordinates) {
       fallback.push({
         source: "db",
@@ -592,6 +600,17 @@ async function findNearestTemplesFromDatabase(latitude, longitude, addressTokens
   }
 
   return [...geocoded.sort((first, second) => first.distance - second.distance), ...fallback].slice(0, 10);
+}
+
+function getTempleCoordinates(temple) {
+  if (Number.isFinite(temple.latitude) && Number.isFinite(temple.longitude)) {
+    return {
+      latitude: temple.latitude,
+      longitude: temple.longitude
+    };
+  }
+
+  return null;
 }
 
 function getDatabaseTempleCandidates(addressTokens) {
@@ -614,46 +633,6 @@ function getFallbackDatabaseTempleResults(addressTokens) {
     }));
 }
 
-async function geocodeTempleAddress(temple) {
-  const cacheKey = `tera.geocode.${temple.name}.${temple.location}`;
-  const cached = localStorage.getItem(cacheKey);
-
-  if (cached) {
-    try {
-      return JSON.parse(cached);
-    } catch {
-      localStorage.removeItem(cacheKey);
-    }
-  }
-
-  const params = new URLSearchParams({
-    format: "jsonv2",
-    q: `${temple.name} ${temple.location}`,
-    countrycodes: "jp",
-    "accept-language": "ja",
-    limit: "1"
-  });
-
-  try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
-    if (!response.ok) return null;
-
-    const places = await response.json();
-    const place = places[0];
-    if (!place) return null;
-
-    const coordinates = {
-      latitude: Number(place.lat),
-      longitude: Number(place.lon)
-    };
-    localStorage.setItem(cacheKey, JSON.stringify(coordinates));
-    return coordinates;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
-}
-
 async function findDatabaseTempleMatch(temple, addressTokens, latitude, longitude) {
   if (temple.source === "db") return temple.temple;
 
@@ -670,15 +649,15 @@ async function findDatabaseTempleMatch(temple, addressTokens, latitude, longitud
 async function findClosestDatabaseTemple(candidates, latitude, longitude) {
   if (candidates.length === 1) return candidates[0];
 
-  const geocoded = await Promise.all(candidates.slice(0, 20).map(async (candidate) => {
-    const coordinates = await geocodeTempleAddress(candidate);
+  const geocoded = candidates.slice(0, 20).map((candidate) => {
+    const coordinates = getTempleCoordinates(candidate);
     if (!coordinates) return null;
 
     return {
       temple: candidate,
       distance: getDistanceMeters(latitude, longitude, coordinates.latitude, coordinates.longitude)
     };
-  }));
+  });
   const closest = geocoded
     .filter(Boolean)
     .sort((first, second) => first.distance - second.distance)[0];
