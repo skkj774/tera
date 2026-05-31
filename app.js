@@ -174,6 +174,41 @@ function formatOsmElementAddress(element) {
   return label;
 }
 
+async function fetchOverpassElements(query) {
+  const params = new URLSearchParams({ data: query });
+  const response = await fetch(`https://overpass-api.de/api/interpreter?${params}`);
+  if (!response.ok) throw new Error("Overpass lookup failed");
+
+  const data = await response.json();
+  return Array.isArray(data.elements) ? data.elements : [];
+}
+
+function findNearestElement(elements, latitude, longitude) {
+  return elements
+    .map((element) => {
+      const center = getElementCenter(element);
+      if (!center) return null;
+      return {
+        element,
+        distance: getDistanceMeters(latitude, longitude, center.latitude, center.longitude)
+      };
+    })
+    .filter(Boolean)
+    .sort((first, second) => first.distance - second.distance)[0];
+}
+
+function formatDistance(meters) {
+  if (meters >= 1000) return `約${(meters / 1000).toFixed(1)}km`;
+  return `約${Math.round(meters)}m`;
+}
+
+function formatTempleElement(nearest) {
+  if (!nearest) return "";
+  const tags = nearest.element.tags ?? {};
+  const name = tags.name || tags["name:ja"] || tags["name:en"] || "名称未設定の寺院";
+  return `${name}（${formatDistance(nearest.distance)}）`;
+}
+
 async function findNearestOsmElement(latitude, longitude) {
   const query = `
     [out:json][timeout:10];
@@ -193,26 +228,31 @@ async function findNearestOsmElement(latitude, longitude) {
     );
     out center tags 40;
   `;
-  const params = new URLSearchParams({ data: query });
-  const response = await fetch(`https://overpass-api.de/api/interpreter?${params}`);
-  if (!response.ok) throw new Error("Overpass lookup failed");
-
-  const data = await response.json();
-  const elements = Array.isArray(data.elements) ? data.elements : [];
-  const nearest = elements
-    .map((element) => {
-      const center = getElementCenter(element);
-      if (!center) return null;
-      return {
-        element,
-        distance: getDistanceMeters(latitude, longitude, center.latitude, center.longitude)
-      };
-    })
-    .filter(Boolean)
-    .sort((first, second) => first.distance - second.distance)[0];
+  const elements = await fetchOverpassElements(query);
+  const nearest = findNearestElement(elements, latitude, longitude);
 
   if (!nearest) return "";
-  return `${formatOsmElementAddress(nearest.element)}（約${Math.round(nearest.distance)}m）`;
+  return `${formatOsmElementAddress(nearest.element)}（${formatDistance(nearest.distance)}）`;
+}
+
+async function findNearestTemple(latitude, longitude) {
+  const query = `
+    [out:json][timeout:10];
+    (
+      node(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
+      way(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
+      relation(around:5000,${latitude},${longitude})["amenity"="place_of_worship"]["religion"="buddhist"];
+      node(around:5000,${latitude},${longitude})["historic"="temple"];
+      way(around:5000,${latitude},${longitude})["historic"="temple"];
+      relation(around:5000,${latitude},${longitude})["historic"="temple"];
+      node(around:5000,${latitude},${longitude})["building"="temple"];
+      way(around:5000,${latitude},${longitude})["building"="temple"];
+      relation(around:5000,${latitude},${longitude})["building"="temple"];
+    );
+    out center tags 80;
+  `;
+  const elements = await fetchOverpassElements(query);
+  return formatTempleElement(findNearestElement(elements, latitude, longitude));
 }
 
 async function findNearestAddress(latitude, longitude) {
@@ -247,15 +287,23 @@ function initializeCurrentLocation() {
       : "";
     const coordinateText = `現在地: ${formatCoordinate(latitude)}, ${formatCoordinate(longitude)}${accuracyText}`;
 
-    setLocationStatus(`${coordinateText} / 所在地を確認中`);
+    setLocationStatus(`${coordinateText} / 所在地と最寄りの寺を確認中`);
 
     try {
-      let nearestAddress = await findNearestOsmElement(latitude, longitude);
+      const [nearestBuilding, nearestTemple] = await Promise.allSettled([
+        findNearestOsmElement(latitude, longitude),
+        findNearestTemple(latitude, longitude)
+      ]);
+      let nearestAddress = nearestBuilding.status === "fulfilled" ? nearestBuilding.value : "";
       if (!nearestAddress) {
         const nearestPlace = await findNearestAddress(latitude, longitude);
         nearestAddress = formatNearestAddress(nearestPlace);
       }
-      setLocationStatus(nearestAddress ? `${coordinateText} / 所在地: ${nearestAddress}` : coordinateText);
+      const nearestTempleText = nearestTemple.status === "fulfilled" ? nearestTemple.value : "";
+      const detailParts = [];
+      if (nearestAddress) detailParts.push(`所在地: ${nearestAddress}`);
+      if (nearestTempleText) detailParts.push(`最寄りの寺: ${nearestTempleText}`);
+      setLocationStatus(detailParts.length > 0 ? `${coordinateText} / ${detailParts.join(" / ")}` : coordinateText);
     } catch (error) {
       console.error(error);
       setLocationStatus(`${coordinateText} / 所在地を取得できません`);
