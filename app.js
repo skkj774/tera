@@ -643,24 +643,45 @@ async function geocodeTempleAddress(temple) {
   }
 }
 
-function findDatabaseTempleMatch(temple, addressTokens) {
+async function findDatabaseTempleMatch(temple, addressTokens, latitude, longitude) {
   if (temple.source === "db") return temple.temple;
 
   const name = getOsmTempleName(temple.element);
   const matches = templeDatabase.filter((item) => item.name === name);
   if (matches.length === 0) return null;
 
-  return matches.find((item) => addressTokens.some((token) => item.location.includes(token))) ||
-    (matches.length === 1 ? matches[0] : null);
+  const regionalMatches = matches.filter((item) => addressTokens.some((token) => item.location.includes(token)));
+  const candidates = regionalMatches.length > 0 ? regionalMatches : matches;
+
+  return findClosestDatabaseTemple(candidates, latitude, longitude);
 }
 
-function attachDatabaseTempleLocations(temples, addressTokens) {
-  return temples.map((temple) => {
+async function findClosestDatabaseTemple(candidates, latitude, longitude) {
+  if (candidates.length === 1) return candidates[0];
+
+  const geocoded = await Promise.all(candidates.slice(0, 20).map(async (candidate) => {
+    const coordinates = await geocodeTempleAddress(candidate);
+    if (!coordinates) return null;
+
+    return {
+      temple: candidate,
+      distance: getDistanceMeters(latitude, longitude, coordinates.latitude, coordinates.longitude)
+    };
+  }));
+  const closest = geocoded
+    .filter(Boolean)
+    .sort((first, second) => first.distance - second.distance)[0];
+
+  return closest?.temple || candidates[0];
+}
+
+async function attachDatabaseTempleLocations(temples, addressTokens, latitude, longitude) {
+  return Promise.all(temples.map(async (temple) => {
     if (temple.source === "db") return temple;
 
-    const dbTemple = findDatabaseTempleMatch(temple, addressTokens);
+    const dbTemple = await findDatabaseTempleMatch(temple, addressTokens, latitude, longitude);
     return dbTemple ? { ...temple, dbTemple } : temple;
-  });
+  }));
 }
 
 function getTempleIdentity(temple) {
@@ -670,10 +691,16 @@ function getTempleIdentity(temple) {
   return formatTempleElement(temple);
 }
 
-function mergeTempleResults(addressTokens, ...resultSets) {
+async function mergeTempleResults(addressTokens, latitude, longitude, ...resultSets) {
   const seen = new Set();
+  const templesWithDatabaseLocations = await attachDatabaseTempleLocations(
+    resultSets.flat(),
+    addressTokens,
+    latitude,
+    longitude
+  );
 
-  return attachDatabaseTempleLocations(resultSets.flat(), addressTokens)
+  return templesWithDatabaseLocations
     .filter(hasTempleName)
     .sort((first, second) => first.distance - second.distance)
     .filter((temple) => {
@@ -773,7 +800,13 @@ function initializeCurrentLocation() {
       if (!nearestAddress) nearestAddress = formatNearestAddress(reversePlace);
       const osmTempleTop10 = nearestTemples.status === "fulfilled" ? nearestTemples.value : [];
       const databaseTempleTop10 = databaseTemples.status === "fulfilled" ? databaseTemples.value : [];
-      const templeTop10 = mergeTempleResults(addressTokens, databaseTempleTop10, osmTempleTop10);
+      const templeTop10 = await mergeTempleResults(
+        addressTokens,
+        latitude,
+        longitude,
+        databaseTempleTop10,
+        osmTempleTop10
+      );
       const detailNodes = [createNearestTemplePopup(templeTop10)];
       replaceLocationStatus(...detailNodes);
       setLocationProgress(100);
