@@ -1,4 +1,5 @@
 const storageKey = "tera.templeRecords";
+const userIdStorageKey = "tera.userId";
 
 const form = document.querySelector("#templeForm");
 const recordId = document.querySelector("#recordId");
@@ -13,6 +14,7 @@ const template = document.querySelector("#recordTemplate");
 const templeSuggestions = document.querySelector("#templeSuggestions");
 const syncStatus = document.querySelector("#syncStatus");
 const locationStatus = document.querySelector("#locationStatus");
+const registeredCount = document.querySelector("#registeredCount");
 
 const fields = {
   name: document.querySelector("#name"),
@@ -27,6 +29,7 @@ const fields = {
 let records = loadRecords();
 const templeDatabase = Array.isArray(window.templeDatabase) ? window.templeDatabase : [];
 let recordsCollection = null;
+let usersCollection = null;
 let cloudSyncEnabled = false;
 let cloudSyncStarted = false;
 
@@ -79,6 +82,15 @@ function saveLocalRecords() {
   localStorage.setItem(storageKey, JSON.stringify(records));
 }
 
+function getCurrentUserId() {
+  let userId = localStorage.getItem(userIdStorageKey);
+  if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem(userIdStorageKey, userId);
+  }
+  return userId;
+}
+
 function hasFirebaseConfig() {
   const config = window.terawalkFirebaseConfig;
   return Boolean(
@@ -90,6 +102,10 @@ function hasFirebaseConfig() {
 
 function setSyncStatus(text) {
   if (syncStatus) syncStatus.textContent = text;
+}
+
+function setRegisteredCount(count) {
+  if (registeredCount) registeredCount.textContent = String(count);
 }
 
 function setLocationStatus(text) {
@@ -320,6 +336,7 @@ function initializeCurrentLocation() {
 function initializeCloudSync() {
   if (!hasFirebaseConfig()) {
     setSyncStatus("ローカル保存");
+    setRegisteredCount(1);
     return;
   }
 
@@ -337,8 +354,24 @@ function initializeCloudSync() {
     const app = sdk.initializeApp(window.terawalkFirebaseConfig);
     const db = sdk.getFirestore(app);
     recordsCollection = sdk.collection(db, "templeRecords");
+    usersCollection = sdk.collection(db, "appUsers");
     cloudSyncEnabled = true;
     setSyncStatus("Firebaseに接続中");
+    setRegisteredCount(1);
+
+    sdk.setDoc(sdk.doc(usersCollection, getCurrentUserId()), {
+      lastSeenAt: new Date().toISOString()
+    }).catch((error) => {
+      console.error(error);
+      setRegisteredCount(1);
+    });
+
+    sdk.onSnapshot(usersCollection, (snapshot) => {
+      setRegisteredCount(snapshot.size);
+    }, (error) => {
+      console.error(error);
+      setRegisteredCount(1);
+    });
 
     const localRecords = loadRecords();
     let migratedLocalRecords = false;

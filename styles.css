@@ -97,9 +97,9 @@ h1 {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(88px, 1fr));
+  grid-template-columns: repeat(4, minmax(88px, 1fr));
   gap: 10px;
-  min-width: 320px;
+  min-width: 420px;
 }
 
 .stats div {
