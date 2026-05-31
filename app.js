@@ -603,6 +603,17 @@ function getDatabaseTempleCandidates(addressTokens) {
   return [];
 }
 
+function getFallbackDatabaseTempleResults(addressTokens) {
+  return getDatabaseTempleCandidates(addressTokens)
+    .filter((temple) => temple.name && !/^Q\d+$/.test(temple.name))
+    .slice(0, 10)
+    .map((temple) => ({
+      source: "db",
+      temple,
+      distance: Number.POSITIVE_INFINITY
+    }));
+}
+
 async function geocodeTempleAddress(temple) {
   const cacheKey = `tera.geocode.${temple.name}.${temple.location}`;
   const cached = localStorage.getItem(cacheKey);
@@ -800,13 +811,16 @@ function initializeCurrentLocation() {
       if (!nearestAddress) nearestAddress = formatNearestAddress(reversePlace);
       const osmTempleTop10 = nearestTemples.status === "fulfilled" ? nearestTemples.value : [];
       const databaseTempleTop10 = databaseTemples.status === "fulfilled" ? databaseTemples.value : [];
-      const templeTop10 = await mergeTempleResults(
+      let templeTop10 = await mergeTempleResults(
         addressTokens,
         latitude,
         longitude,
         databaseTempleTop10,
         osmTempleTop10
       );
+      if (templeTop10.length === 0) {
+        templeTop10 = getFallbackDatabaseTempleResults(addressTokens);
+      }
       const detailNodes = [createNearestTemplePopup(templeTop10)];
       replaceLocationStatus(...detailNodes);
       setLocationProgress(100);
