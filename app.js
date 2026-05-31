@@ -12,6 +12,7 @@ const emptyState = document.querySelector("#emptyState");
 const template = document.querySelector("#recordTemplate");
 const templeSuggestions = document.querySelector("#templeSuggestions");
 const syncStatus = document.querySelector("#syncStatus");
+const locationStatus = document.querySelector("#locationStatus");
 
 const fields = {
   name: document.querySelector("#name"),
@@ -89,6 +90,42 @@ function hasFirebaseConfig() {
 
 function setSyncStatus(text) {
   if (syncStatus) syncStatus.textContent = text;
+}
+
+function setLocationStatus(text) {
+  if (locationStatus) locationStatus.textContent = text;
+}
+
+function formatCoordinate(value) {
+  return value.toFixed(4);
+}
+
+function initializeCurrentLocation() {
+  if (!locationStatus) return;
+
+  if (!("geolocation" in navigator)) {
+    setLocationStatus("現在地を取得できません");
+    return;
+  }
+
+  setLocationStatus("現在地を確認中");
+
+  navigator.geolocation.getCurrentPosition((position) => {
+    const { latitude, longitude, accuracy } = position.coords;
+    const accuracyText = Number.isFinite(accuracy)
+      ? ` / 誤差約${Math.round(accuracy)}m`
+      : "";
+
+    setLocationStatus(
+      `現在地: ${formatCoordinate(latitude)}, ${formatCoordinate(longitude)}${accuracyText}`
+    );
+  }, () => {
+    setLocationStatus("現在地は未許可");
+  }, {
+    enableHighAccuracy: false,
+    maximumAge: 1000 * 60 * 10,
+    timeout: 10000
+  });
 }
 
 function initializeCloudSync() {
@@ -326,4 +363,5 @@ sortSelect.addEventListener("change", renderRecords);
 
 setupTempleDatabase();
 renderRecords();
+initializeCurrentLocation();
 initializeCloudSync();

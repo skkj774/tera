@@ -72,7 +72,8 @@ h1 {
   line-height: 1.8;
 }
 
-.sync-status {
+.sync-status,
+.location-status {
   display: inline-flex;
   align-items: center;
   min-height: 30px;
@@ -84,6 +85,11 @@ h1 {
   padding: 4px 11px;
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.location-status {
+  margin-left: 8px;
+  color: #4d5f56;
 }
 
 .stats {
