@@ -310,12 +310,31 @@ function formatDistance(meters) {
 function formatTempleElement(nearest) {
   if (!nearest) return "";
   if (nearest.source === "db") {
-    return `${nearest.temple.name}（${formatDistance(nearest.distance)}）`;
+    return `${nearest.temple.name} ${formatTempleRegion(nearest)}（${formatDistance(nearest.distance)}）`;
   }
 
   const tags = nearest.element.tags ?? {};
   const name = tags.name || tags["name:ja"] || tags["name:en"] || "名称未設定の寺院";
-  return `${name}（${formatDistance(nearest.distance)}）`;
+  return `${name} ${formatTempleRegion(nearest)}（${formatDistance(nearest.distance)}）`;
+}
+
+function formatTempleRegion(temple) {
+  const location = temple.source === "db"
+    ? temple.temple.location || ""
+    : formatTempleAddress(temple.element);
+  const region = extractRegion(location);
+
+  return region ? `[${region}]` : "";
+}
+
+function extractRegion(location) {
+  const normalized = location
+    .replace(/^日本\s*/, "")
+    .replace(/^〒\d{3}-?\d{4}\s*/, "")
+    .trim();
+  const match = normalized.match(/((?:東京都|北海道|(?:京都|大阪)府|.{2,3}県)?[^都道府県市区町村\s,、]*[市区町村])/);
+
+  return match ? match[1] : "";
 }
 
 function isLikelyTempleElement(element) {
