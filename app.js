@@ -306,6 +306,13 @@ function findNearestElements(elements, latitude, longitude, limit = 10) {
     .slice(0, limit);
 }
 
+function hasTempleName(temple) {
+  if (temple.source === "db") return Boolean(temple.temple.name && !/^Q\d+$/.test(temple.temple.name));
+
+  const tags = temple.element?.tags ?? {};
+  return Boolean(tags.name || tags["name:ja"] || tags["name:en"]);
+}
+
 function formatDistance(meters) {
   if (!Number.isFinite(meters)) return "距離未計算";
   if (meters >= 1000) return `約${(meters / 1000).toFixed(1)}km`;
@@ -609,6 +616,7 @@ function mergeTempleResults(...resultSets) {
 
   return resultSets
     .flat()
+    .filter(hasTempleName)
     .sort((first, second) => first.distance - second.distance)
     .filter((temple) => {
       const key = temple.source === "db"
