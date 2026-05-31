@@ -102,9 +102,7 @@ function fillRecordFormFromTemple(temple) {
   const name = temple.source === "db"
     ? temple.temple.name
     : getOsmTempleName(temple.element);
-  const location = temple.source === "db"
-    ? temple.temple.location || ""
-    : formatTempleAddress(temple.element);
+  const location = getTempleLocation(temple);
 
   fields.name.value = name;
   fields.area.value = extractRegion(location) || location;
@@ -357,9 +355,7 @@ function getOsmTempleName(element) {
 }
 
 function formatTempleRegion(temple) {
-  const location = temple.source === "db"
-    ? temple.temple.location || ""
-    : formatTempleAddress(temple.element);
+  const location = getTempleLocation(temple);
   const region = extractRegion(location);
 
   return region ? `[${region}]` : "";
@@ -402,11 +398,15 @@ function formatTempleAddress(element) {
 }
 
 function formatTemplePopupAddress(temple) {
-  if (temple.source === "db") {
-    return temple.temple.location || "所在地未登録";
-  }
+  return getTempleLocation(temple) || "所在地未登録";
+}
 
-  return formatTempleAddress(temple.element);
+function getTempleLocation(temple) {
+  if (temple.source === "db") return temple.temple.location || "";
+  if (temple.dbTemple) return temple.dbTemple.location || "";
+
+  const osmAddress = formatTempleAddress(temple.element);
+  return osmAddress === "所在地未登録" ? "" : osmAddress;
 }
 
 function createNearestTemplePopup(temples) {
@@ -643,17 +643,41 @@ async function geocodeTempleAddress(temple) {
   }
 }
 
-function mergeTempleResults(...resultSets) {
+function findDatabaseTempleMatch(temple, addressTokens) {
+  if (temple.source === "db") return temple.temple;
+
+  const name = getOsmTempleName(temple.element);
+  const matches = templeDatabase.filter((item) => item.name === name);
+  if (matches.length === 0) return null;
+
+  return matches.find((item) => addressTokens.some((token) => item.location.includes(token))) ||
+    (matches.length === 1 ? matches[0] : null);
+}
+
+function attachDatabaseTempleLocations(temples, addressTokens) {
+  return temples.map((temple) => {
+    if (temple.source === "db") return temple;
+
+    const dbTemple = findDatabaseTempleMatch(temple, addressTokens);
+    return dbTemple ? { ...temple, dbTemple } : temple;
+  });
+}
+
+function getTempleIdentity(temple) {
+  if (temple.source === "db") return `${temple.temple.name}:${temple.temple.location}`;
+  if (temple.dbTemple) return `${temple.dbTemple.name}:${temple.dbTemple.location}`;
+
+  return formatTempleElement(temple);
+}
+
+function mergeTempleResults(addressTokens, ...resultSets) {
   const seen = new Set();
 
-  return resultSets
-    .flat()
+  return attachDatabaseTempleLocations(resultSets.flat(), addressTokens)
     .filter(hasTempleName)
     .sort((first, second) => first.distance - second.distance)
     .filter((temple) => {
-      const key = temple.source === "db"
-        ? `${temple.temple.name}:${temple.temple.location}`
-        : formatTempleElement(temple);
+      const key = getTempleIdentity(temple);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -749,7 +773,7 @@ function initializeCurrentLocation() {
       if (!nearestAddress) nearestAddress = formatNearestAddress(reversePlace);
       const osmTempleTop10 = nearestTemples.status === "fulfilled" ? nearestTemples.value : [];
       const databaseTempleTop10 = databaseTemples.status === "fulfilled" ? databaseTemples.value : [];
-      const templeTop10 = mergeTempleResults(databaseTempleTop10, osmTempleTop10);
+      const templeTop10 = mergeTempleResults(addressTokens, databaseTempleTop10, osmTempleTop10);
       const detailNodes = [createNearestTemplePopup(templeTop10)];
       replaceLocationStatus(...detailNodes);
       setLocationProgress(100);
