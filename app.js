@@ -120,6 +120,101 @@ function formatNearestAddress(place) {
   return buildingName || addressParts.join("") || place.display_name || "";
 }
 
+function toRadians(value) {
+  return value * Math.PI / 180;
+}
+
+function getDistanceMeters(fromLatitude, fromLongitude, toLatitude, toLongitude) {
+  const earthRadiusMeters = 6371000;
+  const latitudeDelta = toRadians(toLatitude - fromLatitude);
+  const longitudeDelta = toRadians(toLongitude - fromLongitude);
+  const startLatitude = toRadians(fromLatitude);
+  const endLatitude = toRadians(toLatitude);
+  const a = Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getElementCenter(element) {
+  if (element.type === "node") {
+    return {
+      latitude: element.lat,
+      longitude: element.lon
+    };
+  }
+
+  if (element.center) {
+    return {
+      latitude: element.center.lat,
+      longitude: element.center.lon
+    };
+  }
+
+  return null;
+}
+
+function formatOsmElementAddress(element) {
+  const tags = element.tags ?? {};
+  const name = tags.name || tags["name:ja"] || tags["name:en"] || "";
+  const kind = tags.amenity || tags.shop || tags.tourism || tags.office || tags.building || "";
+  const addressParts = [
+    tags["addr:province"] || tags["addr:state"],
+    tags["addr:city"],
+    tags["addr:suburb"] || tags["addr:quarter"] || tags["addr:neighbourhood"],
+    tags["addr:street"],
+    tags["addr:housenumber"]
+  ].filter(Boolean);
+  const label = name || (kind && kind !== "yes" ? kind : "建物");
+
+  if (addressParts.length > 0) {
+    return `${label} / ${addressParts.join("")}`;
+  }
+
+  return label;
+}
+
+async function findNearestOsmElement(latitude, longitude) {
+  const query = `
+    [out:json][timeout:10];
+    (
+      node(around:120,${latitude},${longitude})["building"];
+      way(around:120,${latitude},${longitude})["building"];
+      relation(around:120,${latitude},${longitude})["building"];
+      node(around:120,${latitude},${longitude})["amenity"];
+      way(around:120,${latitude},${longitude})["amenity"];
+      relation(around:120,${latitude},${longitude})["amenity"];
+      node(around:120,${latitude},${longitude})["shop"];
+      way(around:120,${latitude},${longitude})["shop"];
+      relation(around:120,${latitude},${longitude})["shop"];
+      node(around:120,${latitude},${longitude})["tourism"];
+      way(around:120,${latitude},${longitude})["tourism"];
+      relation(around:120,${latitude},${longitude})["tourism"];
+    );
+    out center tags 40;
+  `;
+  const params = new URLSearchParams({ data: query });
+  const response = await fetch(`https://overpass-api.de/api/interpreter?${params}`);
+  if (!response.ok) throw new Error("Overpass lookup failed");
+
+  const data = await response.json();
+  const elements = Array.isArray(data.elements) ? data.elements : [];
+  const nearest = elements
+    .map((element) => {
+      const center = getElementCenter(element);
+      if (!center) return null;
+      return {
+        element,
+        distance: getDistanceMeters(latitude, longitude, center.latitude, center.longitude)
+      };
+    })
+    .filter(Boolean)
+    .sort((first, second) => first.distance - second.distance)[0];
+
+  if (!nearest) return "";
+  return `${formatOsmElementAddress(nearest.element)}（約${Math.round(nearest.distance)}m）`;
+}
+
 async function findNearestAddress(latitude, longitude) {
   const params = new URLSearchParams({
     format: "jsonv2",
@@ -155,8 +250,11 @@ function initializeCurrentLocation() {
     setLocationStatus(`${coordinateText} / 所在地を確認中`);
 
     try {
-      const nearestPlace = await findNearestAddress(latitude, longitude);
-      const nearestAddress = formatNearestAddress(nearestPlace);
+      let nearestAddress = await findNearestOsmElement(latitude, longitude);
+      if (!nearestAddress) {
+        const nearestPlace = await findNearestAddress(latitude, longitude);
+        nearestAddress = formatNearestAddress(nearestPlace);
+      }
       setLocationStatus(nearestAddress ? `${coordinateText} / 所在地: ${nearestAddress}` : coordinateText);
     } catch (error) {
       console.error(error);

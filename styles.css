@@ -88,8 +88,11 @@ h1 {
 }
 
 .location-status {
+  max-width: min(100%, 760px);
   margin-left: 8px;
   color: #4d5f56;
+  line-height: 1.5;
+  white-space: normal;
 }
 
 .stats {
