@@ -16,6 +16,7 @@ const args = new Map(
 
 const limit = Number(args.get("limit") || 50);
 const delayMs = Number(args.get("delay") || 1400);
+const fetchTimeoutMs = Number(args.get("timeout") || 20000);
 
 function parseCsv(text) {
   const rows = [];
@@ -133,6 +134,7 @@ async function searchNominatim(query) {
     limit: "1"
   });
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+    signal: AbortSignal.timeout(fetchTimeoutMs),
     headers: {
       "User-Agent": "TeraWalk/1.0 (local app data build; skkj774.github.io/tera)"
     }
@@ -148,7 +150,9 @@ async function searchNominatim(query) {
 
 async function searchGsiAddress(query) {
   const params = new URLSearchParams({ q: query });
-  const response = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?${params}`);
+  const response = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?${params}`, {
+    signal: AbortSignal.timeout(fetchTimeoutMs)
+  });
 
   if (!response.ok) {
     throw new Error(`GSI address search returned ${response.status}`);
