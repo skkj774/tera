@@ -17,6 +17,7 @@ const args = new Map(
 const limit = Number(args.get("limit") || 50);
 const delayMs = Number(args.get("delay") || 1400);
 const fetchTimeoutMs = Number(args.get("timeout") || 20000);
+const useNominatim = args.get("nominatim") === "1";
 
 function parseCsv(text) {
   const rows = [];
@@ -171,6 +172,7 @@ async function searchGsiAddress(query) {
 async function geocode(row) {
   const gsiPlace = await searchGsiAddress(row.location.trim());
   if (gsiPlace) return gsiPlace;
+  if (!useNominatim) return null;
 
   for (const query of buildQueries(row)) {
     const place = await searchNominatim(query);
